@@ -16,7 +16,67 @@ using namespace std;
 
 class wish {
 	private:
-		vector<string> tokenize(string my_line){
+		vector<string> my_paths;
+
+		void print_error(){
+			    char error_message[30] = "An error has occurred\n";
+				write(STDERR_FILENO, error_message, strlen(error_message)); 
+		}
+
+		void my_exit(vector<string> &my_line){
+			if(my_line[0] == "exit" && my_line.size() == 1){
+				exit(0);
+			}
+			else{
+				print_error();
+			}
+		}
+
+		void my_cd(vector<string> &my_line){ 
+			if(my_line.size() == 1 || my_line.size() > 2){
+				print_error();
+			}
+			else{
+				const char* path = my_line[1].c_str();
+				chdir(path);
+			}
+		}
+
+		void my_path(vector<string> &my_line){ 
+			// If there are 0 args. Set the paths to empty string
+			if(my_line.size() == 1){
+				my_paths = {};
+			}
+			// Otherwise set the paths 
+			else{
+				vector<string> curr_paths;
+				for(size_t i = 1; i < my_line.size(); i++){
+					curr_paths.push_back(my_line[i]);
+				}
+
+			}
+		}
+		
+		void process_command(vector<string> &my_line){
+			// Either execute built in commands or regular commands
+			if(my_line[0] == "exit"){
+				my_exit(my_line);
+			}
+			else if(my_line[0] == "cd"){
+				my_cd(my_line);
+			}
+			else if(my_line[0] == "path"){
+				my_path(my_line);
+			}
+			else if(my_paths.size() == 0){
+				print_error();
+			}
+			else{
+				execute_command(my_line);
+			}
+		} 
+		
+		vector<string> tokenize(string &my_line){
 			vector<string> my_tokens;
 			istringstream stream(my_line);
 			string my_word;
@@ -34,7 +94,7 @@ class wish {
 				vector<vector<string>> all_commands;
 				string my_line;
 				if(!my_file){
-					cout << "ERROR: unable to open file" << endl;
+					print_error();
 					exit(1);
 				}
 
@@ -44,52 +104,68 @@ class wish {
 				}
 
 				for(vector<string> my_command : all_commands){
-					execute_command(my_command);
+					process_command(my_command);
 				}
 				my_file.close();
-				return;
 		}
 
 		void execute_command(vector<string> command){
 			int pid = fork();
 
 			if(pid < 0){
-				cout << "ERROR: fork failed." << endl;
-				exit(1);
+				print_error();
 			}
 			else if(pid == 0){
-				string path = "/bin/" + command[0];
-				char *exec_path = strdup(path.c_str());				
-				char **args = new char*[command.size() + 1];
-
-				// Insert the string into the args array 
-				for(size_t i = 0; i < command.size(); i++){
-					args[i] = strdup(command[i].c_str());
+				// Check if accessing the executable is a valid option
+				string path;
+				bool path_accessible;
+				
+				for(string curr_path : my_paths){
+					path = curr_path + "/" + command[0];
+					if((path_accessible = access(path.c_str(), X_OK) == 0)){
+						break;
+					}
 				}
 
-				args[command.size()] = NULL;
-				execv(exec_path, args);
+				if(path_accessible){
+					char *exec_path = strdup(path.c_str());				
+					char **args = new char*[command.size() + 1];
+
+					// Insert the string into the args array 
+					for(size_t i = 0; i < command.size(); i++){
+						args[i] = strdup(command[i].c_str());
+					}
+
+					args[command.size()] = NULL;
+					execv(exec_path, args);
 
 
-				// Still got to free the allocated args array
-				free(exec_path);
-				for (size_t i = 0; i < command.size(); i++) {
-        			free(args[i]); // Free each argument
-    			}
-				delete(args); 
-
+					// Still got to free the allocated args array
+					for (size_t i = 0; i < command.size(); i++) {
+						free(args[i]); // Free each argument
+					}
+					
+					free(exec_path);
+					delete(args); 
+				}
+				else{
+					print_error();
+				}
+				
 				exit(0);
 			}
 			else{
 				wait(NULL);
 			}
-			return;
 		} 
 
 		
 
 	public: 
 		wish(int argc, char* argv[]){
+			// Initializes all paths
+			my_paths.push_back("/bin");
+
 			// Check if you can open the file the file for batch mode
 			if(argc == 1){
 				string my_line;	
@@ -98,29 +174,22 @@ class wish {
 					cout << "wish> ";
 					getline(cin, my_line);
 					vector<string> my_tokens = tokenize(my_line);
-					
-					if(my_tokens[0] == "exit" && my_tokens.size() == 1){
-						exit(0);
-					}
-					else if(my_tokens[0] == "exit"){
-						continue;
-					}
-					else{
-						execute_command(my_tokens);
-					}
+					process_command(my_tokens);
 				}
 			}
 			else if(argc == 2){
 				execute_batch(argv[1]);
+			}
+			else{
+				print_error();
+				exit(1);
 			}
 		}
 
 };
 
 int main(int argc, char* argv[]){
-
 	wish(argc, argv);
 	exit(0);
-
 }
 
