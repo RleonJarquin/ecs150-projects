@@ -10,6 +10,7 @@
 #include <vector>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <algorithm>
 
 
 using namespace std;
@@ -17,6 +18,18 @@ using namespace std;
 class wish {
 	private:
 		vector<string> my_paths;
+	
+		void parse_redirection(vector<string> &command){
+			vector<string> sub_command;
+			string path = command[command.size() - 1];
+			 
+			for(size_t i = 0; i < command.size() - 1; i++){
+				// If redirection shows up twice, print error
+				sub_command.push_back(command[i]);
+			}
+			
+			command = sub_command;
+		}
 
 		void print_error(){
 			    char error_message[30] = "An error has occurred\n";
@@ -53,6 +66,8 @@ class wish {
 				for(size_t i = 1; i < my_line.size(); i++){
 					curr_paths.push_back(my_line[i]);
 				}
+
+				my_paths = curr_paths;
 
 			}
 		}
@@ -119,6 +134,14 @@ class wish {
 				// Check if accessing the executable is a valid option
 				string path;
 				bool path_accessible;
+
+				// Check if redirection is applicable. If so extract the command
+				auto it = find(command.begin(), command.end(), ">");
+
+				// Check if > is in command
+				if(it == command.end()){
+					parse_redirection(command);
+				}
 				
 				for(string curr_path : my_paths){
 					path = curr_path + "/" + command[0];
