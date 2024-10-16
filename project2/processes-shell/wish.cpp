@@ -18,8 +18,26 @@ using namespace std;
 class wish {
 	private:
 		vector<string> my_paths;
-		void make_parsable(vector<string> &command, const char my_char){
-			
+
+		bool char_in_vector(vector<string> &command, const char my_char){
+			// // Check if parallel is applicable. If so extract the command
+			// auto it = find(command.begin(), command.end(), my_char);
+
+			// // Check if & is in my_line
+			// if(it != command.end()){
+			// 	return true;
+			// }
+
+			// Check if the character is a substring of the elements
+			for(string substring : command){
+				if(substring.find(my_char) != string::npos){
+					return true;
+				}
+			}
+			return false;
+		}
+
+		void make_parsable(vector<string> &command, const char my_char){	
 			// For the given character, insert white space and reparse the modified command vector
 			vector<string> new_command;
 			const char* curr_token;
@@ -39,6 +57,7 @@ class wish {
 						new_line += curr_token[i];
 					}
 				}
+				new_line += " ";
 			}
 
 			new_line += '\0';
@@ -50,7 +69,8 @@ class wish {
 				new_command.push_back(string(new_token));
 				new_token = strtok(nullptr," ");
 			}
-
+			
+			command = new_command;
 			delete(mutable_line);
 		}
 
@@ -90,7 +110,6 @@ class wish {
 					if(i + 1 >= command.size() || i - 1 < 0 || i + 1 != command.size() - 1  
 					|| max_redirection < 0|| command[i - 1] == ">" || command[i + 1] == ">"){
 						command = {"__INVALID__"};
-
 						return;
 					}
 					else{
@@ -105,7 +124,7 @@ class wish {
 			}
 
 			// Open the and redirect STDOUT and STERROR to the file
-			int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | 0644);
+			int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | 0644);
 
 			// If file did not open return no commands and let execute command print errors
 			if(fd < 0){
@@ -175,11 +194,8 @@ class wish {
 			// Parse for parallel commands 
 			vector<vector<string>> all_commands;
 
-			// Check if parallel is applicable. If so extract the command
-			auto it = find(my_line.begin(), my_line.end(), "&");
-
 			// Check if & is in my_line
-			if(it != my_line.end()){
+			if(char_in_vector(my_line, '&')){
 				parse_parallel(all_commands, my_line);
 			}
 			else{
@@ -255,11 +271,8 @@ class wish {
 				string path;
 				bool path_accessible;
 
-				// Check if redirection is applicable. If so extract the command
-				auto it = find(command.begin(), command.end(), ">");
-
 				// Check if > is in command
-				if(it != command.end()){
+				if(char_in_vector(command, '>')){
 					parse_redirection(command);
 				}
 				
