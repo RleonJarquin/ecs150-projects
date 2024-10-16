@@ -18,17 +18,114 @@ using namespace std;
 class wish {
 	private:
 		vector<string> my_paths;
+		void make_parsable(vector<string> &command, const char my_char){
+			
+			// For the given character, insert white space and reparse the modified command vector
+			vector<string> new_command;
+			const char* curr_token;
+			char* new_token;
+			string new_line = "";
+
+			for(string token : command){
+				curr_token = token.c_str();
+				for(int i = 0; curr_token[i] != '\0'; i++){
+					if(curr_token[i] == my_char){
+						new_line += ' ';
+						new_line += my_char;
+						new_line += ' ';
+
+					}
+					else{
+						new_line += curr_token[i];
+					}
+				}
+			}
+
+			new_line += '\0';
+			char* mutable_line = new char[new_line.length() - 1];
+			strcpy(mutable_line, new_line.c_str());
+			new_token = strtok(mutable_line, " ");
+
+			while(new_token != nullptr){
+				new_command.push_back(string(new_token));
+				new_token = strtok(nullptr," ");
+			}
+
+			delete(mutable_line);
+		}
+
+		void parse_parallel(vector<vector<string>> &all_commands, vector<string> &command){
+			make_parsable(command, '&');
+			vector<string> sub_command;
+
+			// Loop through command and add subcommand to all commands
+			for(size_t i = 0; i < command.size(); i++){
+				if(command[i] == "&"){
+					// Check if parallel syntax has been violated otherwise add sub command to all commands
+					if(i + 1 >= command.size() || i - 1 < 0 || command[i - 1] == "&" || command[i + 1] == "&"){
+						all_commands = {};
+						return;
+					}
+					else{
+						all_commands.push_back(sub_command);
+						sub_command = {};
+					}
+				}
+				else{
+					sub_command.push_back(command[i]);
+				}
+			}
+		}
 	
 		void parse_redirection(vector<string> &command){
+			make_parsable(command, '>');
 			vector<string> sub_command;
-			string path = command[command.size() - 1];
+			string path;
+			int max_redirection = 1;
 			 
-			for(size_t i = 0; i < command.size() - 1; i++){
-				// If redirection shows up twice, print error
-				sub_command.push_back(command[i]);
+			 // Only accepts 1 redirection 
+			for(size_t i = 0; i < command.size(); i++){
+				if(command[i] == ">"){
+					// Check if parallel syntax has been violated otherwise add sub command to all commands
+					if(i + 1 >= command.size() || i - 1 < 0 || i + 1 != command.size() - 1  
+					|| max_redirection < 0|| command[i - 1] == ">" || command[i + 1] == ">"){
+						command = {"__INVALID__"};
+
+						return;
+					}
+					else{
+						command = sub_command;
+						path = command[i + 1];
+						max_redirection--;
+					}
+				}
+				else{
+					sub_command.push_back(command[i]);
+				}
 			}
-			
-			command = sub_command;
+
+			// Open the and redirect STDOUT and STERROR to the file
+			int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | 0644);
+
+			// If file did not open return no commands and let execute command print errors
+			if(fd < 0){
+				command = {"__INVALID__"};
+				return;
+			}
+
+			if(dup2(fd, STDOUT_FILENO) == -1){
+				command = {"__INVALID__"};
+				close(fd);
+				return;
+			};
+
+			if(dup2(fd, STDERR_FILENO) == -1){
+				command = {"__INVALID__"};
+				close(fd);
+				return;
+			}
+
+			close(fd);
 		}
 
 		void print_error(){
@@ -74,6 +171,23 @@ class wish {
 		
 		void process_command(vector<string> &my_line){
 			// Either execute built in commands or regular commands
+
+			// Parse for parallel commands 
+			vector<vector<string>> all_commands;
+
+			// Check if parallel is applicable. If so extract the command
+			auto it = find(my_line.begin(), my_line.end(), "&");
+
+			// Check if & is in my_line
+			if(it != my_line.end()){
+				parse_parallel(all_commands, my_line);
+			}
+			else{
+				all_commands = {my_line};
+			}
+			
+
+			
 			if(my_line[0] == "exit"){
 				my_exit(my_line);
 			}
@@ -83,11 +197,16 @@ class wish {
 			else if(my_line[0] == "path"){
 				my_path(my_line);
 			}
-			else if(my_paths.size() == 0){
+			else if(my_paths.size() == 0 || all_commands.size() == 0){
 				print_error();
 			}
+			else if(all_commands.size() > 1){
+				for(vector<string> my_command : all_commands){
+					process_command(my_command);
+				}
+			}
 			else{
-				execute_command(my_line);
+				execute_command(all_commands[0]);
 			}
 		} 
 		
@@ -126,6 +245,7 @@ class wish {
 
 		void execute_command(vector<string> command){
 			int pid = fork();
+			// int pid = 0;
 
 			if(pid < 0){
 				print_error();
@@ -139,7 +259,7 @@ class wish {
 				auto it = find(command.begin(), command.end(), ">");
 
 				// Check if > is in command
-				if(it == command.end()){
+				if(it != command.end()){
 					parse_redirection(command);
 				}
 				
@@ -215,4 +335,3 @@ int main(int argc, char* argv[]){
 	wish(argc, argv);
 	exit(0);
 }
-
