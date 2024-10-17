@@ -86,11 +86,11 @@ class wish {
 						all_commands.push_back({});
 						return;
 					}
-					else if(i - 1 > command.size() || i == command.size() - 1){
-						all_commands.push_back(sub_command);
-						return;
+					else if(i == 0 ){// || (i == command.size() - 1 && command[i] == "&")){
+						continue;
 					}
-					else if(command[i - 1] == "&" || command[i + 1] == "&"){
+					else if((i - 1 < command.size() && i + 1 < command.size()) &&  
+					(command[i - 1] == "&" || command[i + 1] == "&")){
 						all_commands = {};
 						return;
 					}
@@ -102,6 +102,10 @@ class wish {
 				else{
 					sub_command.push_back(command[i]);
 				}
+			}
+
+			if(sub_command.size() != 0){
+				all_commands.push_back(sub_command);
 			}
 		}
 	
