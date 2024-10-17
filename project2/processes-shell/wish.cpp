@@ -82,7 +82,15 @@ class wish {
 			for(size_t i = 0; i < command.size(); i++){
 				if(command[i] == "&"){
 					// Check if parallel syntax has been violated otherwise add sub command to all commands
-					if(i + 1 >= command.size() || i - 1 < 0 || command[i - 1] == "&" || command[i + 1] == "&"){
+					if(command.size() == 1){
+						all_commands.push_back({});
+						return;
+					}
+					else if(i - 1 > command.size() || i == command.size() - 1){
+						all_commands.push_back(sub_command);
+						return;
+					}
+					else if(command[i - 1] == "&" || command[i + 1] == "&"){
 						all_commands = {};
 						return;
 					}
@@ -107,7 +115,7 @@ class wish {
 			for(size_t i = 0; i < command.size(); i++){
 				if(command[i] == ">"){
 					// Check if parallel syntax has been violated otherwise add sub command to all commands
-					if(i + 1 >= command.size() || i - 1 < 0 || i + 1 != command.size() - 1  
+					if(i + 1 >= command.size() || i - 1 > command.size() || i + 1 > command.size() || i + 1 != command.size() - 1
 					|| max_redirection < 0|| command[i - 1] == ">" || command[i + 1] == ">"){
 						command = {"__INVALID__"};
 						return;
@@ -216,6 +224,9 @@ class wish {
 			else if(my_paths.size() == 0 || all_commands.size() == 0){
 				print_error();
 			}
+			else if(all_commands[0].size() == 0){
+				return;
+			}
 			else if(all_commands.size() > 1){
 				for(vector<string> my_command : all_commands){
 					process_command(my_command);
@@ -250,7 +261,9 @@ class wish {
 
 				while(getline(my_file, my_line)){
 					vector<string> my_tokens = tokenize(my_line);
-					all_commands.push_back(my_tokens);
+					if(my_tokens.size() != 0){
+						all_commands.push_back(my_tokens);
+					}
 				}
 
 				for(vector<string> my_command : all_commands){
