@@ -232,12 +232,11 @@ class wish {
 				return;
 			}
 			else if(all_commands.size() > 1){
-				for(vector<string> my_command : all_commands){
-					process_command(my_command);
-				}
+				execute_command(all_commands);
+				
 			}
 			else{
-				execute_command(all_commands[0]);
+				execute_command(all_commands);
 			}
 		} 
 		
@@ -276,60 +275,77 @@ class wish {
 				my_file.close();
 		}
 
-		void execute_command(vector<string> command){
-			int pid = fork();
-			// int pid = 0;
+		void execute_command(vector<vector<string>> all_commands){
+			vector<pid_t> children;
 
-			if(pid < 0){
-				print_error();
-			}
-			else if(pid == 0){
-				// Check if accessing the executable is a valid option
-				string path;
-				bool path_accessible;
+			for(size_t i = 0; i < all_commands.size(); i++){
+			
+				int pid = fork();
+				vector<string> command = all_commands[i];
 
-				// Check if > is in command
-				if(char_in_vector(command, '>')){
-					parse_redirection(command);
-				}
-				
-				for(string curr_path : my_paths){
-					path = curr_path + "/" + command[0];
-					if((path_accessible = access(path.c_str(), X_OK) == 0)){
-						break;
-					}
-				}
+				// Check if PID is not 0. Add to children 
+				if(pid != 0){
+					children.push_back(pid);
+					continue;
+				} 
 
-				if(path_accessible){
-					char *exec_path = strdup(path.c_str());				
-					char **args = new char*[command.size() + 1];
-
-					// Insert the string into the args array 
-					for(size_t i = 0; i < command.size(); i++){
-						args[i] = strdup(command[i].c_str());
-					}
-
-					args[command.size()] = NULL;
-					execv(exec_path, args);
-
-
-					// Still got to free the allocated args array
-					for (size_t i = 0; i < command.size(); i++) {
-						free(args[i]); // Free each argument
-					}
-					
-					free(exec_path);
-					delete(args); 
-				}
-				else{
+				// int pid = 0;
+				if(pid < 0){
 					print_error();
 				}
-				
-				exit(0);
+				else if(pid == 0){
+					// Check if accessing the executable is a valid option
+					string path;
+					bool path_accessible;
+
+					// Check if > is in command
+					if(char_in_vector(command, '>')){
+						parse_redirection(command);
+					}
+					
+					for(string curr_path : my_paths){
+						path = curr_path + "/" + command[0];
+						if((path_accessible = access(path.c_str(), X_OK) == 0)){
+							break;
+						}
+					}
+
+					if(path_accessible){
+						char *exec_path = strdup(path.c_str());				
+						char **args = new char*[command.size() + 1];
+
+						// Insert the string into the args array 
+						for(size_t i = 0; i < command.size(); i++){
+							args[i] = strdup(command[i].c_str());
+						}
+
+						args[command.size()] = NULL;
+						execv(exec_path, args);
+
+
+						// Still got to free the allocated args array
+						for (size_t i = 0; i < command.size(); i++) {
+							free(args[i]); // Free each argument
+						}
+						
+						free(exec_path);
+						delete(args); 
+					}
+					else{
+						print_error();
+					}
+					
+					exit(0);
+				}
 			}
-			else{
-				wait(NULL);
+
+			for(size_t i = 0; i < children.size(); i++){
+				waitpid(children[i], NULL, 0);
 			}
+
+			// else{
+			// 	wait(NULL);
+			// }
 		} 
 
 		
