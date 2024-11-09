@@ -8,7 +8,6 @@
 #include <string>
 
 #include "FileService.h"
-
 using namespace std;
 
 FileService::FileService(string basedir) : HttpService("/") {
@@ -35,6 +34,13 @@ bool FileService::endswith(string str, string suffix) {
 
 void FileService::get(HTTPRequest *request, HTTPResponse *response) {
   string path = this->m_basedir + request->getPath();
+
+  // Reject the file request if its accessing parent directories
+  if(path.substr(0,2) == ".."){
+    response->setStatus(403);
+    return;
+  }
+
   string fileContents = this->readFile(path);
   if (fileContents.size() == 0) {
     response->setStatus(403);
