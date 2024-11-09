@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <queue>
 #include <deque>
 
 #include "HTTPRequest.h"
@@ -30,6 +31,13 @@ string SCHEDALG = "FIFO";
 string LOGFILE = "/dev/null";
 
 vector<HttpService *> services;
+
+// Rubens Variables
+queue<MySocket*> buffer;
+pthread_mutex_t *queue_lock;
+pthread_cond_t *has_requests;
+pthread_cond_t *has_room;
+bool stop_ = false; 
 
 HttpService *find_service(HTTPRequest *request) {
    // find a service that is registered for this path prefix
@@ -104,6 +112,28 @@ void handle_request(MySocket *client) {
   delete client;
 }
 
+void* worker_thread(void* args){
+
+  while(true){
+    dthread_mutex_lock(queue_lock);
+    while(buffer.size() == 0){
+      dthread_cond_wait(has_requests, queue_lock);
+    }
+  
+    // Handle current request
+    sync_print("waiting_to_accept", "");
+    MySocket* client = buffer.front(); // Retrieve the front element
+    buffer.pop(); // Now, pop it off the queue
+    handle_request(client);
+    sync_print("client_accepted", "");
+
+    // Signal that the queue has room
+    dthread_cond_signal(has_room);
+
+    dthread_mutex_unlock(queue_lock);
+
+  }
+}
 int main(int argc, char *argv[]) {
 
   signal(SIGPIPE, SIG_IGN);
@@ -144,11 +174,21 @@ int main(int argc, char *argv[]) {
   // The order that you push services dictates the search order
   // for path prefix matching
   services.push_back(new FileService(BASEDIR));
-  
+
+  for(unsigned long i = 0; i < THREAD_POOL_SIZE; i++){
+    // threads.emplace_back(p)
+    pthread_t current_thread;
+    dthread_create(&current_thread, NULL, worker_thread, NULL);
+  }
+
   while(true) {
-    sync_print("waiting_to_accept", "");
+    dthread_mutex_lock(queue_lock);
+    while(buffer.size() < BUFFER_SIZE){
+      dthread_cond_wait(has_requests, queue_lock);
+    }
     client = server->accept();
-    sync_print("client_accepted", "");
-    handle_request(client);
+    buffer.emplace(client);
+    dthread_cond_broadcast(has_requests);
+    dthread_mutex_unlock(queue_lock);
   }
 }
