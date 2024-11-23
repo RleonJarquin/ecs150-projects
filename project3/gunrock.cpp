@@ -21,6 +21,9 @@
 #include "MyServerSocket.h"
 #include "dthread.h"
 
+#include <pthread.h>
+
+
 using namespace std;
 
 int PORT = 8080;
@@ -33,10 +36,12 @@ string LOGFILE = "/dev/null";
 vector<HttpService *> services;
 
 // Rubens Variables
-queue<MySocket*> buffer;
+deque<MySocket*> buffer;
 pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t has_requests = PTHREAD_COND_INITIALIZER;
 pthread_cond_t has_room = PTHREAD_COND_INITIALIZER;
+pthread_attr_t attr;
+
 bool stop_ = false; 
 
 HttpService *find_service(HTTPRequest *request) {
@@ -116,20 +121,23 @@ void* worker_thread(void* args){
 
   while(true){
     dthread_mutex_lock(&queue_lock);
-
+    MySocket* client = NULL;
     // While the buffer is empty, wait until it is full
     while(buffer.size() == 0){
       dthread_cond_wait(&has_requests, &queue_lock);
     }
   
     // Handle current request
-    MySocket* client = buffer.front(); // Retrieve the front element
-    buffer.pop(); // Now, pop it off the queue
-    handle_request(client);
+    client = buffer.front(); // Retrieve the front element
+    buffer.pop_front(); // Now, pop it off the queue
 
     // Signal that the queue has room
     dthread_cond_signal(&has_room);
     dthread_mutex_unlock(&queue_lock);
+
+    if (client != NULL){
+      handle_request(client);
+    }
   }
 }
 int main(int argc, char *argv[]) {
@@ -173,25 +181,29 @@ int main(int argc, char *argv[]) {
   // for path prefix matching
   services.push_back(new FileService(BASEDIR));
 
+  // Initialize attribute and set policy to FIFO
+  pthread_attr_init(&attr);
+  pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
+
   for(int i = 0; i < THREAD_POOL_SIZE; i++){
     // threads.emplace_back(p)
     pthread_t current_thread;
-    dthread_create(&current_thread, NULL, worker_thread, NULL);
+    dthread_create(&current_thread, &attr, worker_thread, NULL);
+    dthread_detach(current_thread);
   }
 
   while(true) {
-    dthread_mutex_lock(&queue_lock);
-    while(static_cast<int>(buffer.size()) == BUFFER_SIZE){
-      dthread_cond_wait(&has_room, &queue_lock);
-    }
-    dthread_mutex_unlock(&queue_lock);
 
     sync_print("waiting_to_accept", "");
     client = server->accept();
     sync_print("client_accepted", "");
 
     dthread_mutex_lock(&queue_lock);
-    buffer.push(client);
+    while(static_cast<int>(buffer.size()) >= BUFFER_SIZE){
+      dthread_cond_wait(&has_room, &queue_lock);
+    }
+ 
+    buffer.push_back(client);
     dthread_cond_broadcast(&has_requests);
     dthread_mutex_unlock(&queue_lock);
   }

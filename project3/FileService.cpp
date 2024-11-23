@@ -36,7 +36,7 @@ void FileService::get(HTTPRequest *request, HTTPResponse *response) {
   string path = this->m_basedir + request->getPath();
 
   // Reject the file request if its accessing parent directories
-  if(path.substr(0,2) == ".."){
+  if(path.find("..") != string::npos){
     response->setStatus(403);
     return;
   }
