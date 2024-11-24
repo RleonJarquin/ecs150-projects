@@ -22,13 +22,9 @@ int main(int argc, char *argv[]) {
   LocalFileSystem *fileSystem = new LocalFileSystem(disk);
   
   // Read the 4 KB super block starting at 0
-  char buffer[4000];
   super_t super_block;
-  disk -> readBlock(0, buffer);
-
-  // Setting the size of the super block and copying the data
   memset(&super_block, 0, 4000);
-  memcpy(&super_block, &buffer, 4000);
+  fileSystem -> readSuperBlock(&super_block);
 
   // Read the inode bitmaps and data bitmaps
   unsigned char* inode_bitmap_ptr = new unsigned char[super_block.inode_bitmap_len];
