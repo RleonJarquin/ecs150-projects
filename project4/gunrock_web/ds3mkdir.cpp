@@ -17,12 +17,14 @@ int main(int argc, char *argv[]) {
   }
 
   // Parse command line arguments
-  /*
+  
   Disk *disk = new Disk(argv[1], UFS_BLOCK_SIZE);
   LocalFileSystem *fileSystem = new LocalFileSystem(disk);
   int parentInode = stoi(argv[2]);
   string directory = string(argv[3]);
-  */
   
+  // Creating the directory
+  fileSystem->create(parentInode, 0, directory);
+
   return 0;
 }
