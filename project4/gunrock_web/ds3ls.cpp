@@ -38,13 +38,14 @@ int main(int argc, char *argv[]) {
 
   // Iteratively lookup the file directory starting from root
   int curr_dir_entry = 0;
+
   while(char* new_token = strtok(const_cast<char*>(directory.c_str()), ("/"))){
       string my_entry = new_token;
       curr_dir_entry = fileSystem -> lookup(curr_dir_entry, my_entry);
   }
  
   // Read from the dir dir_entry 
-  while(fileSystem -> read(curr_dir_entry, buffer, 4096)){
+  while(fileSystem -> read(curr_dir_entry, buffer, UFS_BLOCK_SIZE)){
     my_dir_entries += buffer;
   }
 
@@ -59,13 +60,18 @@ int main(int argc, char *argv[]) {
   }
 
   // Sort the array 
-  sort(dir_entry_vec.begin(), dir_entry_vec.end(), [](dir_ent_t a, dir_ent_t b){
-    a.inum < b.inum;
-  });
+  // sort(dir_entry_vec.begin(), dir_entry_vec.end(), [](dir_ent_t a, dir_ent_t b){
+  //   return a.inum < b.inum;
+  // });
+  sort(dir_entry_vec.begin(), dir_entry_vec.end(), compareByName);
 
   for(dir_ent_t entry: dir_entry_vec){
     cout << entry.inum << "\t" << entry.name << endl;
   }
+
+  // free memory
+  delete fileSystem;
+  delete disk;
 
   return 0;
 }

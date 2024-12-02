@@ -40,8 +40,8 @@ void LocalFileSystem::readDataBitmap(super_t *super, unsigned char *dataBitmap) 
   // For the length of the bitmap read bytes into inodeBitmap
   char buffer[UFS_BLOCK_SIZE];
   int len = super->data_bitmap_len;
-  int num_data = super->num_data;
-  string data_bitmap_str; 
+  int num_data_bytes = (super->num_data + 8 - 1) / 8;
+  // string data_bitmap_str; 
 
 
   for(int i = 0; i < len; i++){
@@ -50,12 +50,9 @@ void LocalFileSystem::readDataBitmap(super_t *super, unsigned char *dataBitmap) 
     disk->readBlock(start + i, buffer);    
 
     // Add the buffer to the string
-    data_bitmap_str += buffer;
+    memcpy(dataBitmap + (UFS_BLOCK_SIZE * i), buffer, num_data_bytes);
+    num_data_bytes -= UFS_BLOCK_SIZE;
   }
-
-  // Copy the bytes from the string to char array
-  // int bytes_read = strlen(data_bitmap_str.c_str());
-  memcpy(dataBitmap, &data_bitmap_str, num_data);
 }
 
 void LocalFileSystem::writeDataBitmap(super_t *super, unsigned char *dataBitmap) {
@@ -132,7 +129,8 @@ int LocalFileSystem::stat(int inodeNumber, inode_t *inode) {
 
   // setting the data for inodes 
   int num_inodes = super->num_inodes;
-  inode_t* inodes = new inode_t[num_inodes];
+  inode_t* inodes = (inode_t*)malloc(num_inodes * sizeof(inode_t));  // Allocate with malloc
+  // inode_t* inodes = new inode_t[num_inodes];
 
   // Reading the inodes block
   readInodeRegion(super, inodes);
@@ -141,6 +139,9 @@ int LocalFileSystem::stat(int inodeNumber, inode_t *inode) {
   inode_t my_inode = inodes[inodeNumber];
   memcpy(inode, &my_inode, sizeof(my_inode));
 
+  // free memory
+  free(super);
+  free(inodes);  
   return 0;
 }
 
@@ -150,41 +151,56 @@ int LocalFileSystem::read(int inodeNumber, void *buffer, int size) {
 
   // Allocate space for the bitmap
   //super->data_bitmap_len * UFS_BLOCK_SIZE
-  unsigned char* data_bitmap = new unsigned char[super->num_data];
+  unsigned char* data_bitmap =  (unsigned char*)malloc((super->num_data + 8 - 1) / 8);
   readDataBitmap(super, data_bitmap);
 
   // Read the inode
   inode_t* my_inode = (inode_t*)malloc(sizeof(inode_t));
   stat(inodeNumber, my_inode);
   
+  // Copy the direct ptrs
+  unsigned int ptrs[DIRECT_PTRS];
+  for (int i = 0; i < DIRECT_PTRS; ++i) {
+      ptrs[i] = my_inode->direct[i];
+  }  
   // declare second buffer
   char buff[UFS_BLOCK_SIZE];
-  string data;
+  // string data;
 
   // Figure out which entry in inode.direct to lookup the disk block 
   int data_block_num = 0;
-  for(unsigned int ptr: my_inode->direct){
+  int total_bytes_read = 0;
+
+  for(unsigned int ptr: ptrs){
     if(size == 0){
       break;
     }
 
     int block = int(ptr / UFS_BLOCK_SIZE);
     
-    // int byte_shift_amnt = data_block_num / 8; 
-    // int bit_shift_amnt = data_block_num % 8;
-    // int extracted_bit;
+    // Extract the bit
+    int byte_shift_amnt = data_block_num / 8; 
+    int bit_shift_amnt = data_block_num % 8;
+    char curr_byte = data_bitmap[byte_shift_amnt];
+    int extracted_bit = (curr_byte >> bit_shift_amnt) & 1;
 
-    if(data_bitmap[block] == '1'){
-      disk->readBlock(ptr, buff);
-      int bytes_read = strlen(buff);
+    if(extracted_bit == 1){
+      disk->readBlock(block, buff);
+      int bytes_to_copy = min(size, UFS_BLOCK_SIZE);
+
+      memcpy((char*)buffer, buff, bytes_to_copy);
 
       // read the data from the buffer into the arr
-      data += buff;
-      size -= bytes_read;
+      total_bytes_read += bytes_to_copy;
+      size -= bytes_to_copy;
       data_block_num++;
     }
   }
-  memcpy(buffer, &data, strlen(data.c_str()));
+
+  // Free memory 
+  free(super);
+  free(my_inode);
+  free(data_bitmap);
   // Convert bytes to blocks and get the disk block 
   // Read the block data from the disk 
   // Copy the data that the user asked for
