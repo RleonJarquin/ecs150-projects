@@ -33,45 +33,70 @@ int main(int argc, char *argv[]) {
 
   // Basic variable declarations
   char buffer[4096];
-  string my_dir_entries;
-
-
-  // Iteratively lookup the file directory starting from root
-  int curr_dir_entry = 0;
-
-  while(char* new_token = strtok(const_cast<char*>(directory.c_str()), ("/"))){
-      string my_entry = new_token;
-      curr_dir_entry = fileSystem -> lookup(curr_dir_entry, my_entry);
-  }
  
-  // Read from the dir dir_entry 
-  while(fileSystem -> read(curr_dir_entry, buffer, UFS_BLOCK_SIZE)){
-    my_dir_entries += buffer;
+  // Iteratively lookup the file directory starting from root
+  int curr_inode_number = 0;
+  int last_inode_number;
+  bool is_file = false;
+  char* last_token;
+
+  char* new_token = strtok(const_cast<char*>(directory.c_str()), ("/"));
+
+  while(new_token != NULL){
+      last_inode_number = curr_inode_number;
+      string my_entry = new_token;
+      curr_inode_number = fileSystem -> lookup(curr_inode_number, my_entry);
+      last_token = new_token;
+      new_token = strtok(NULL, "/");
   }
 
-  // memcpy my_dir_entrys into arr of dir_ent_t
-  dir_ent_t dir_entry_arr[sizeof(my_dir_entries)]; 
-  memcpy(&dir_entry_arr, &my_dir_entries, sizeof(my_dir_entries));
+  // Initializing data inode
+  inode_t* my_inode = fileSystem->buildInode(curr_inode_number);
+
+  if(my_inode->type == UFS_REGULAR_FILE){
+    inode_t* new_inode = fileSystem->buildInode(last_inode_number);
+    memcpy(my_inode, new_inode, sizeof(inode_t));
+    free(new_inode);
+    // my_inode = fileSystem->buildInode(last_inode_number);
+    curr_inode_number = last_inode_number;
+    is_file = true;
+  }
+
+  // Initializing dir_entry_arry
+  dir_ent_t* dir_entry_arr = new dir_ent_t[my_inode->size / sizeof(dir_ent_t)];
+ 
+  // Read from the dir_entry 
+  fileSystem -> read(curr_inode_number, buffer, UFS_BLOCK_SIZE);
+  memcpy(dir_entry_arr, buffer, my_inode->size);
 
   // turn array into vector 
   vector<dir_ent_t> dir_entry_vec;
-  for(dir_ent_t dir_entry: dir_entry_arr){
-    dir_entry_vec.push_back(dir_entry);
+  int num_entries = my_inode->size / sizeof(dir_ent_t);
+
+  for(int i = 0; i < num_entries; i++){
+    dir_entry_vec.push_back(dir_entry_arr[i]);
   }
 
-  // Sort the array 
-  // sort(dir_entry_vec.begin(), dir_entry_vec.end(), [](dir_ent_t a, dir_ent_t b){
-  //   return a.inum < b.inum;
-  // });
   sort(dir_entry_vec.begin(), dir_entry_vec.end(), compareByName);
 
-  for(dir_ent_t entry: dir_entry_vec){
-    cout << entry.inum << "\t" << entry.name << endl;
+  // If it is a file print out the entry data otherwise print out the directory 
+  if(is_file){
+    for(dir_ent_t entry: dir_entry_vec){
+      if(strcmp(entry.name, last_token) == 0 ){
+          cout << entry.inum << "\t" << entry.name << endl;
+      }
+    }
   }
-
+  else{
+      for(dir_ent_t entry: dir_entry_vec){
+        cout << entry.inum << "\t" << entry.name << endl;
+      }
+  }
+  
   // free memory
+  free(my_inode);
+  delete[] dir_entry_arr;
   delete fileSystem;
   delete disk;
-
   return 0;
 }
